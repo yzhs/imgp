@@ -34,7 +34,7 @@ adapt = False  # use adaptive resolution
 convert = False  # convert PNG to JPG
 dot = False  # process hidden files starting with .
 eraseexif = False  # erase EXIF metadata
-progressive = False # save as a progressive image
+progressive = False  # save as a progressive image
 force = False  # forced to exact specified resolution
 includeimgp = False  # process _IMGP files
 keep = False  # ignore images with matching hres or vres
@@ -70,10 +70,7 @@ def getres(res):
     if len(hxv) != 2:
         return (0, 0)
 
-    try:
-        return(int(hxv[0]), int(hxv[1]))
-    except:
-        return (0, 0)
+    return (int(hxv[0]), int(hxv[1]))
 
 
 def lock_print(msg):
@@ -83,6 +80,12 @@ def lock_print(msg):
 
     with lock:
         print(msg)
+
+
+def debug_print(*msg):
+    '''Print a message if debug is True'''
+    if debug:
+        lock_print(*msg)
 
 
 def cb(data):
@@ -120,6 +123,31 @@ def traverse_dir(path):
         with lock:
             print(e)
 
+
+def is_supported(_format, src):
+    if _format not in ['JPEG', 'PNG', 'MPO']:
+        debug_print(src + ': not JPEG/PNG/MPO. format: ' + _format)
+        return False
+    return True
+
+
+def convert_palette_png(_format, img):
+    return convert and _format == 'PNG' and img.mode == 'P'
+
+
+def custom_round(x):
+    if x >= int(x) + .5:
+        x = x + 1
+    return int(x)
+
+
+def suffix(name):
+    if overwrite:
+        return name
+    else:
+        return name + pad
+
+
 def rotate_image(src):
     '''Rotate a source image'''
 
@@ -135,31 +163,18 @@ def rotate_image(src):
         img = Image.open(src)
         _format = img.format
 
-        if _format not in ['JPEG', 'PNG', 'MPO']:
-            if debug:
-                lock_print(src + ': not JPEG/PNG/MPO. format: ' + _format)
+        if not is_supported(_format, src):
             return
 
-        if convert and _format == 'PNG' and img.mode == 'P':
-            if debug:
-                lock_print('rotate_image: cannot convert PNG files in palette mode')
+        if convert_palette_png(_format, img):
+            debug_print('rotate_image: cannot convert PNG files in palette mode')
             return
 
-        try:
-            if _format == 'JPEG' and not _progressive and img.info['progressive']:
-                if debug:
-                    lock_print('resize_image: progressive')
-                _progressive = True
-        except:
-            pass
+        if _format == 'JPEG' and not _progressive and img.info.get('progressive', False):
+            debug_print('rotate_image: progressive')
+            _progressive = True
 
-        try:
-            if eraseexif:
-                exifdata = b''
-            else:
-                exifdata = img.info['exif']
-        except:
-            exifdata = b''
+        exifdata = b'' if eraseexif else img.info.get('exif', b'')
     except OSError as e:
         if not str(e).startswith('cannot identify image file'):
             with lock:
@@ -173,21 +188,16 @@ def rotate_image(src):
     if not mute:
         stats = src + '\n%ld bytes ->' % os.path.getsize(src)
 
-    if overwrite:
-        suffix = ''
-    else:
-        suffix = pad
-
     if convert and _format == 'PNG':
         if img.mode in ('RGBA', 'LA'):
             background = Image.new(img.mode[:-1], img.size, fill_color)
             background.paste(img, img.split()[-1])
             img = background
-        dest = name + suffix + '.jpg'
+        dest = suffix(name) + '.jpg'
         _format = 'JPEG'
         converted = True
     else:
-        dest = name + suffix + ext
+        dest = suffix(name) + ext
 
     try:
         img.save(dest, _format, quality=qual, optimize=optimal, exif=exifdata, progressive=_progressive)
@@ -219,43 +229,28 @@ def resize_image(src):
         img = Image.open(src)
         _format = img.format
 
-        if _format not in ['JPEG', 'PNG', 'MPO']:
-            if debug:
-                lock_print(src + ': not JPEG/PNG/MPO. format: ' + _format)
+        if not is_supported(_format, src):
             return
 
-        if convert and _format == 'PNG' and img.mode == 'P':
-            if debug:
-                lock_print('resize_image: cannot convert PNG files in palette mode')
+        if convert_palette_png(_format, img):
+            debug_print('resize_image: cannot convert PNG files in palette mode')
             return
 
         # check if convert or progressive is specified without any resolution option
         if no_res_opt:
             if convert and _format != 'PNG':
-                if debug:
-                    lock_print('resize_image: cannot convert non-PNG')
+                debug_print('resize_image: cannot convert non-PNG')
                 return
 
             if progressive and _format not in ['JPEG', 'MPO']:
-                if debug:
-                    lock_print('resize_image: cannot make non-JPEG/MPO progressive')
+                debug_print('resize_image: cannot make non-JPEG/MPO progressive')
                 return
 
-        try:
-            if _format == 'JPEG' and not _progressive and img.info['progressive']:
-                if debug:
-                    lock_print('resize_image: progressive')
-                _progressive = True
-        except:
-            pass
+        if _format == 'JPEG' and not _progressive and img.info.get('progressive', False):
+            debug_print('resize_image: progressive')
+            _progressive = True
 
-        try:
-            if eraseexif:
-                exifdata = b''
-            else:
-                exifdata = img.info['exif']
-        except:
-            exifdata = b''
+        exifdata = b'' if eraseexif else img.info.get('exif', b'')
     except OSError as e:
         if not str(e).startswith('cannot identify image file'):
             with lock:
@@ -279,20 +274,11 @@ def resize_image(src):
             _hres = hres
             _vres = vres
         else:
-            _hres = hres * scale/float(100)
-            # use custom round()
-            if _hres >= int(_hres) + .5:
-                _hres = _hres + 1
-            _hres = int(_hres)
-
-            _vres = vres * scale/float(100)
-            if _vres >= int(_vres) + .5:
-                _vres = _vres + 1
-            _vres = int(_vres)
+            _hres = custom_round(hres * scale/float(100))
+            _vres = custom_round(vres * scale/float(100))
 
         img = img.resize((_hres, _vres), antialias)
-        if debug:
-            lock_print('resize_image: scaled to [%dx%d]' % (_hres, _vres))
+        debug_print('resize_image: scaled to [%dx%d]' % (_hres, _vres))
     elif HRES == 0 or VRES == 0:
         if HRES:
             if not enlarge and HRES > hres:
@@ -301,14 +287,10 @@ def resize_image(src):
                 return [0, 1]
 
             hratio = HRES/float(hres)
-            target_vres = vres * hratio
-            if target_vres >= int(target_vres) + .5:
-                target_vres = target_vres + 1
-            target_vres = int(target_vres)
+            target_vres = custom_round(vres * hratio)
 
             img = img.resize((HRES, target_vres), antialias)
-            if debug:
-                lock_print('resize_image: 0 vres %dx%d' % (HRES, target_vres))
+            debug_print('resize_image: 0 vres %dx%d' % (HRES, target_vres))
 
         if VRES:
             if not enlarge and VRES > vres:
@@ -317,21 +299,15 @@ def resize_image(src):
                 return [0, 1]
 
             vratio = VRES/float(vres)
-            target_hres = hres * vratio
-            if target_hres >= int(target_hres) + .5:
-                target_hres = target_hres + 1
-            target_hres = int(target_hres)
+            target_hres = custom_round(hres * vratio)
 
             img = img.resize((target_hres, VRES), antialias)
-            if debug:
-                lock_print('resize_image: 0 hres %dx%d' % (target_hres, VRES))
+            debug_print('resize_image: 0 hres %dx%d' % (target_hres, VRES))
     elif HRES == hres and VRES == vres:
-        if debug:
-            lock_print('resize_image: same res [%dx%d]' % (HRES, VRES))
+        debug_print('resize_image: same res [%dx%d]' % (HRES, VRES))
     elif force:
         img = img.resize((HRES, VRES), antialias)
-        if debug:
-            lock_print('resize_image: brute force res to [%dx%d]' % (HRES, VRES))
+        debug_print('resize_image: brute force res to [%dx%d]' % (HRES, VRES))
     elif adapt:
         ratio_img = float(hres/vres)
         ratio_target = float(HRES/VRES)
@@ -346,14 +322,10 @@ def resize_image(src):
 
             if HRES != hres:
                 hratio = HRES/float(hres)
-                target_vres = vres * hratio
-                if target_vres >= int(target_vres) + .5:
-                    target_vres = target_vres + 1
-                target_vres = int(target_vres)
+                target_vres = custom_round(vres * hratio)
 
                 img = img.resize((HRES, target_vres), antialias)
-                if debug:
-                    lock_print('resize_image: vres adapted %dx%d' % (HRES, target_vres))
+                debug_print('resize_image: vres adapted %dx%d' % (HRES, target_vres))
         elif (ratio_target < 1 and ratio_img < 1) or (ratio_target >= 1 and ratio_img <= 1):
             # same orientation (H < V and h < v) or
             # cross orientation (H >= V and h <= v)
@@ -364,14 +336,10 @@ def resize_image(src):
 
             if VRES != vres:
                 vratio = VRES/float(vres)
-                target_hres = hres * vratio
-                if target_hres >= int(target_hres) + .5:
-                    target_hres = target_hres + 1
-                target_hres = int(target_hres)
+                target_hres = custom_round(hres * vratio)
 
                 img = img.resize((target_hres, VRES), antialias)
-                if debug:
-                    lock_print('resize_image: hres adapted %dx%d' % (target_hres, VRES))
+                debug_print('resize_image: hres adapted %dx%d' % (target_hres, VRES))
     else:
         ratio_img = float(hres/vres)
         ratio_target = float(HRES/VRES)
@@ -384,14 +352,10 @@ def resize_image(src):
 
             # re-sample as per target horizontal resolution
             hratio = HRES/float(hres)
-            target_vres = vres * hratio
-            if target_vres >= int(target_vres) + .5:
-                target_vres = target_vres + 1
-            target_vres = int(target_vres)
+            target_vres = custom_round(vres * hratio)
 
             img = img.resize((HRES, target_vres), antialias)
-            if debug:
-                lock_print('resize_image: vres calculated %dx%d' % (HRES, target_vres))
+            debug_print('resize_image: vres calculated %dx%d' % (HRES, target_vres))
         else:
             if not enlarge and VRES > vres:
                 if not mute:
@@ -400,33 +364,24 @@ def resize_image(src):
 
             # re-sample as per target vertical resolution
             vratio = VRES/float(vres)
-            target_hres = hres * vratio
-            if target_hres >= int(target_hres) + .5:
-                target_hres = target_hres + 1
-            target_hres = int(target_hres)
+            target_hres = custom_round(hres * vratio)
 
             img = img.resize((target_hres, VRES), antialias)
-            if debug:
-                lock_print('resize_image: hres calculated %dx%d' % (target_hres, VRES))
+            debug_print('resize_image: hres calculated %dx%d' % (target_hres, VRES))
 
     if not mute:
         stats = src + '\n%dx%d -> %dx%d\n%ld bytes ->' % (hres, vres, img.size[0], img.size[1], os.path.getsize(src))
-
-    if overwrite:
-        suffix = ''
-    else:
-        suffix = pad
 
     if convert and _format == 'PNG':
         if img.mode in ('RGBA', 'LA'):
             background = Image.new(img.mode[:-1], img.size, fill_color)
             background.paste(img, img.split()[-1])
             img = background
-        dest = name + suffix + '.jpg'
+        dest = suffix(name) + '.jpg'
         _format = 'JPEG'
         converted = True
     else:
-        dest = name + suffix + ext
+        dest = suffix(name) + ext
 
     try:
         img.save(dest, _format, quality=qual, optimize=optimal, exif=exifdata, progressive=_progressive)
