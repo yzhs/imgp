@@ -191,6 +191,17 @@ def is_input_valid(src):
         return
 
 
+def scale_dimensions(hres, vres, scale):
+    if scale == 100:
+        _hres = hres
+        _vres = vres
+    else:
+        factor = scale/float(100)
+        _hres = custom_round(hres * factor)
+        _vres = custom_round(vres * factor)
+    return _hres, _vres
+
+
 def rotate_image(src):
     '''Rotate a source image'''
 
@@ -281,13 +292,7 @@ def resize_image(src):
         if convert and _format != 'PNG':
             return
     elif scale:
-        if scale == 100:
-            _hres = hres
-            _vres = vres
-        else:
-            _hres = custom_round(hres * scale/float(100))
-            _vres = custom_round(vres * scale/float(100))
-
+        (_hres, _vres) = scale_dimensions(hres, vres, scale)
         img = img.resize((_hres, _vres), antialias)
         debug_print('resize_image: scaled to [%dx%d]' % (_hres, _vres))
     elif HRES == 0 or VRES == 0:
