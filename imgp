@@ -162,6 +162,35 @@ def compute_destination(name, ext, img):
         return suffix(name) + ext
 
 
+def is_input_valid(src):
+    global _progressive
+    try:
+        img = Image.open(src)
+        _format = img.format
+
+        if not is_supported(_format, src):
+            return
+
+        if convert_palette_png(_format, img):
+            debug_print('resize_image: cannot convert PNG files in palette mode')
+            return
+
+        # check if convert or progressive is specified without any resolution option
+        if no_res_opt:
+            if convert and _format != 'PNG':
+                debug_print('resize_image: cannot convert non-PNG')
+                return
+
+            if progressive and _format not in ['JPEG', 'MPO']:
+                debug_print('resize_image: cannot make non-JPEG/MPO progressive')
+                return
+        return img
+    except OSError as e:
+        if not str(e).startswith('cannot identify image file'):
+            lock_print(e)
+        return
+
+
 def rotate_image(src):
     '''Rotate a source image'''
 
@@ -228,36 +257,16 @@ def resize_image(src):
     if name.endswith(pad) and not includeimgp:
         return
 
-    try:
-        img = Image.open(src)
-        _format = img.format
-
-        if not is_supported(_format, src):
-            return
-
-        if convert_palette_png(_format, img):
-            debug_print('resize_image: cannot convert PNG files in palette mode')
-            return
-
-        # check if convert or progressive is specified without any resolution option
-        if no_res_opt:
-            if convert and _format != 'PNG':
-                debug_print('resize_image: cannot convert non-PNG')
-                return
-
-            if progressive and _format not in ['JPEG', 'MPO']:
-                debug_print('resize_image: cannot make non-JPEG/MPO progressive')
-                return
-
-        if _format == 'JPEG' and not _progressive and img.info.get('progressive', False):
-            debug_print('resize_image: progressive')
-            _progressive = True
-
-        exifdata = b'' if eraseexif else img.info.get('exif', b'')
-    except OSError as e:
-        if not str(e).startswith('cannot identify image file'):
-            lock_print(e)
+    img = is_input_valid(src)
+    if img is None:
         return
+
+    _format = img.format
+    if _format == 'JPEG' and not _progressive and img.info.get('progressive', False):
+        debug_print('resize_image: progressive')
+        _progressive = True
+
+    exifdata = b'' if eraseexif else img.info.get('exif', b'')
 
     hres = img.size[0]
     vres = img.size[1]
