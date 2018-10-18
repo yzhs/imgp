@@ -88,6 +88,12 @@ def debug_print(*msg):
         lock_print(*msg)
 
 
+def not_mute_print(*msg):
+    '''Print a message if mute is False'''
+    if not mute:
+        lock_print(*msg)
+
+
 def cb(data):
     global count, count_lowres
 
@@ -200,8 +206,7 @@ def rotate_image(src):
     try:
         img.save(dest, _format, quality=qual, optimize=optimal, exif=exifdata, progressive=_progressive)
 
-        if not mute:
-            lock_print('%s %ld bytes\n' % (stats, os.path.getsize(dest)))
+        not_mute_print('%s %ld bytes\n' % (stats, os.path.getsize(dest)))
 
         if overwrite and converted:
             os.remove(src)
@@ -280,8 +285,7 @@ def resize_image(src):
     elif HRES == 0 or VRES == 0:
         if HRES:
             if not enlarge and HRES > hres:
-                if not mute:
-                    lock_print('%s has lesser hres\n' % src)
+                not_mute_print('%s has lesser hres\n' % src)
                 return [0, 1]
 
             hratio = HRES/float(hres)
@@ -292,8 +296,7 @@ def resize_image(src):
 
         if VRES:
             if not enlarge and VRES > vres:
-                if not mute:
-                    lock_print('%s has lesser vres\n' % src)
+                not_mute_print('%s has lesser vres\n' % src)
                 return [0, 1]
 
             vratio = VRES/float(vres)
@@ -314,8 +317,7 @@ def resize_image(src):
             # same orientation (H >= V and h > v) or
             # cross orientation (H < V and h >= v)
             if not enlarge and HRES > hres:
-                if not mute:
-                    lock_print('%s has lesser hres\n' % src)
+                not_mute_print('%s has lesser hres\n' % src)
                 return [0, 1]
 
             if HRES != hres:
@@ -328,8 +330,7 @@ def resize_image(src):
             # same orientation (H < V and h < v) or
             # cross orientation (H >= V and h <= v)
             if not enlarge and VRES > vres:
-                if not mute:
-                    lock_print('%s has lesser vres\n' % src)
+                not_mute_print('%s has lesser vres\n' % src)
                 return [0, 1]
 
             if VRES != vres:
@@ -344,8 +345,7 @@ def resize_image(src):
 
         if ratio_img >= ratio_target:
             if not enlarge and HRES > hres:
-                if not mute:
-                    lock_print('%s has lesser hres\n' % src)
+                not_mute_print('%s has lesser hres\n' % src)
                 return [0, 1]
 
             # re-sample as per target horizontal resolution
@@ -356,8 +356,7 @@ def resize_image(src):
             debug_print('resize_image: vres calculated %dx%d' % (HRES, target_vres))
         else:
             if not enlarge and VRES > vres:
-                if not mute:
-                    lock_print('%s has lesser vres\n' % src)
+                not_mute_print('%s has lesser vres\n' % src)
                 return [0, 1]
 
             # re-sample as per target vertical resolution
@@ -384,8 +383,7 @@ def resize_image(src):
     try:
         img.save(dest, _format, quality=qual, optimize=optimal, exif=exifdata, progressive=_progressive)
 
-        if not mute:
-            lock_print('%s %ld bytes\n' % (stats, os.path.getsize(dest)))
+        not_mute_print('%s %ld bytes\n' % (stats, os.path.getsize(dest)))
 
         if overwrite and converted:
             os.remove(src)
