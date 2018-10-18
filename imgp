@@ -202,6 +202,95 @@ def scale_dimensions(hres, vres, scale):
     return _hres, _vres
 
 
+def resize_image_given_one_dimension(img, hres, vres, src, antialias):
+    if HRES:
+        if not enlarge and HRES > hres:
+            not_mute_print('%s has lesser hres\n' % src)
+            return None, [0, 1]
+
+        hratio = HRES/float(hres)
+        target_vres = custom_round(vres * hratio)
+
+        img = img.resize((HRES, target_vres), antialias)
+        debug_print('resize_image: 0 vres %dx%d' % (HRES, target_vres))
+
+    if VRES:
+        if not enlarge and VRES > vres:
+            not_mute_print('%s has lesser vres\n' % src)
+            return None, [0, 1]
+
+        vratio = VRES/float(vres)
+        target_hres = custom_round(hres * vratio)
+
+        img = img.resize((target_hres, VRES), antialias)
+        debug_print('resize_image: 0 hres %dx%d' % (target_hres, VRES))
+
+    return img, None
+
+
+def resize_image_adapt(img, hres, vres, src, antialias):
+    ratio_img = float(hres/vres)
+    ratio_target = float(HRES/VRES)
+
+    if (ratio_target >= 1 and ratio_img > 1) or (ratio_target < 1 and ratio_img >= 1):
+        # same orientation (H >= V and h > v) or
+        # cross orientation (H < V and h >= v)
+        if not enlarge and HRES > hres:
+            not_mute_print('%s has lesser hres\n' % src)
+            return None, [0, 1]
+
+        if HRES != hres:
+            hratio = HRES/float(hres)
+            target_vres = custom_round(vres * hratio)
+
+            img = img.resize((HRES, target_vres), antialias)
+            debug_print('resize_image: vres adapted %dx%d' % (HRES, target_vres))
+    elif (ratio_target < 1 and ratio_img < 1) or (ratio_target >= 1 and ratio_img <= 1):
+        # same orientation (H < V and h < v) or
+        # cross orientation (H >= V and h <= v)
+        if not enlarge and VRES > vres:
+            not_mute_print('%s has lesser vres\n' % src)
+            return None, [0, 1]
+
+        if VRES != vres:
+            vratio = VRES/float(vres)
+            target_hres = custom_round(hres * vratio)
+
+            img = img.resize((target_hres, VRES), antialias)
+            debug_print('resize_image: hres adapted %dx%d' % (target_hres, VRES))
+
+    return img, None
+
+
+def resize_image_default(img, hres, vres, src, antialias):
+    ratio_img = float(hres/vres)
+    ratio_target = float(HRES/VRES)
+
+    if ratio_img >= ratio_target:
+        if not enlarge and HRES > hres:
+            not_mute_print('%s has lesser hres\n' % src)
+            return None, [0, 1]
+
+        # re-sample as per target horizontal resolution
+        hratio = HRES/float(hres)
+        target_vres = custom_round(vres * hratio)
+
+        img = img.resize((HRES, target_vres), antialias)
+        debug_print('resize_image: vres calculated %dx%d' % (HRES, target_vres))
+    else:
+        if not enlarge and VRES > vres:
+            not_mute_print('%s has lesser vres\n' % src)
+            return None, [0, 1]
+
+        # re-sample as per target vertical resolution
+        vratio = VRES/float(vres)
+        target_hres = custom_round(hres * vratio)
+
+        img = img.resize((target_hres, VRES), antialias)
+        debug_print('resize_image: hres calculated %dx%d' % (target_hres, VRES))
+
+    return img, None
+
 def rotate_image(src):
     '''Rotate a source image'''
 
@@ -286,98 +375,30 @@ def resize_image(src):
     antialias = png_ip if _format == 'PNG' else PIL.Image.ANTIALIAS
 
     if keep and (HRES == hres or VRES == vres or scale == 100):
-        if progressive and _format not in ['JPEG', 'MPO']:
-            return
-
-        if convert and _format != 'PNG':
+        if progressive and _format not in ['JPEG', 'MPO'] or \
+                convert and _format != 'PNG':
             return
     elif scale:
         (_hres, _vres) = scale_dimensions(hres, vres, scale)
         img = img.resize((_hres, _vres), antialias)
         debug_print('resize_image: scaled to [%dx%d]' % (_hres, _vres))
     elif HRES == 0 or VRES == 0:
-        if HRES:
-            if not enlarge and HRES > hres:
-                not_mute_print('%s has lesser hres\n' % src)
-                return [0, 1]
-
-            hratio = HRES/float(hres)
-            target_vres = custom_round(vres * hratio)
-
-            img = img.resize((HRES, target_vres), antialias)
-            debug_print('resize_image: 0 vres %dx%d' % (HRES, target_vres))
-
-        if VRES:
-            if not enlarge and VRES > vres:
-                not_mute_print('%s has lesser vres\n' % src)
-                return [0, 1]
-
-            vratio = VRES/float(vres)
-            target_hres = custom_round(hres * vratio)
-
-            img = img.resize((target_hres, VRES), antialias)
-            debug_print('resize_image: 0 hres %dx%d' % (target_hres, VRES))
+        img, err = resize_image_given_one_dimension(img, hres, vres, src, antialias)
+        if err:
+            return err
     elif HRES == hres and VRES == vres:
         debug_print('resize_image: same res [%dx%d]' % (HRES, VRES))
     elif force:
         img = img.resize((HRES, VRES), antialias)
         debug_print('resize_image: brute force res to [%dx%d]' % (HRES, VRES))
     elif adapt:
-        ratio_img = float(hres/vres)
-        ratio_target = float(HRES/VRES)
-
-        if (ratio_target >= 1 and ratio_img > 1) or (ratio_target < 1 and ratio_img >= 1):
-            # same orientation (H >= V and h > v) or
-            # cross orientation (H < V and h >= v)
-            if not enlarge and HRES > hres:
-                not_mute_print('%s has lesser hres\n' % src)
-                return [0, 1]
-
-            if HRES != hres:
-                hratio = HRES/float(hres)
-                target_vres = custom_round(vres * hratio)
-
-                img = img.resize((HRES, target_vres), antialias)
-                debug_print('resize_image: vres adapted %dx%d' % (HRES, target_vres))
-        elif (ratio_target < 1 and ratio_img < 1) or (ratio_target >= 1 and ratio_img <= 1):
-            # same orientation (H < V and h < v) or
-            # cross orientation (H >= V and h <= v)
-            if not enlarge and VRES > vres:
-                not_mute_print('%s has lesser vres\n' % src)
-                return [0, 1]
-
-            if VRES != vres:
-                vratio = VRES/float(vres)
-                target_hres = custom_round(hres * vratio)
-
-                img = img.resize((target_hres, VRES), antialias)
-                debug_print('resize_image: hres adapted %dx%d' % (target_hres, VRES))
+        img, err = resize_image_adapt(img, hres, vres, src, antialias)
+        if err:
+            return err
     else:
-        ratio_img = float(hres/vres)
-        ratio_target = float(HRES/VRES)
-
-        if ratio_img >= ratio_target:
-            if not enlarge and HRES > hres:
-                not_mute_print('%s has lesser hres\n' % src)
-                return [0, 1]
-
-            # re-sample as per target horizontal resolution
-            hratio = HRES/float(hres)
-            target_vres = custom_round(vres * hratio)
-
-            img = img.resize((HRES, target_vres), antialias)
-            debug_print('resize_image: vres calculated %dx%d' % (HRES, target_vres))
-        else:
-            if not enlarge and VRES > vres:
-                not_mute_print('%s has lesser vres\n' % src)
-                return [0, 1]
-
-            # re-sample as per target vertical resolution
-            vratio = VRES/float(vres)
-            target_hres = custom_round(hres * vratio)
-
-            img = img.resize((target_hres, VRES), antialias)
-            debug_print('resize_image: hres calculated %dx%d' % (target_hres, VRES))
+        img, err = resize_image_default(img, hres, vres, src, antialias)
+        if err:
+            return err
 
     if not mute:
         stats = src + '\n%dx%d -> %dx%d\n%ld bytes ->' % (hres, vres, img.size[0], img.size[1], os.path.getsize(src))
