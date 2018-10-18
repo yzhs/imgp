@@ -115,10 +115,8 @@ def traverse_dir(path):
                     traverse_dir(entry.path)
             elif (entry.is_file(follow_symlinks=False) and
                   entry.stat().st_size >= size):
-                if rotate is not None:
-                    pool.apply_async(rotate_image, args=(entry.path,), callback=cb)
-                else:
-                    pool.apply_async(resize_image, args=(entry.path,), callback=cb)
+                op = rotate_image if rotate is not None else resize_image
+                pool.apply_async(op, args=(entry.path,), callback=cb)
     except OSError as e:
         with lock:
             print(e)
