@@ -152,12 +152,22 @@ def suffix(name):
         return name + pad
 
 
+def compute_destination(name, ext, img):
+    if convert and img.format == 'PNG':
+        if img.mode in ('RGBA', 'LA'):
+            background = Image.new(img.mode[:-1], img.size, fill_color)
+            background.paste(img, img.split()[-1])
+            img = background
+        return suffix(name) + '.jpg'
+    else:
+        return suffix(name) + ext
+
+
 def rotate_image(src):
     '''Rotate a source image'''
 
     global lock
 
-    converted = False
     _progressive = progressive
     name, ext = os.path.splitext(src)
     if name.endswith(pad) and not includeimgp:
@@ -192,16 +202,12 @@ def rotate_image(src):
     if not mute:
         stats = src + '\n%ld bytes ->' % os.path.getsize(src)
 
+    converted = False
     if convert and _format == 'PNG':
-        if img.mode in ('RGBA', 'LA'):
-            background = Image.new(img.mode[:-1], img.size, fill_color)
-            background.paste(img, img.split()[-1])
-            img = background
-        dest = suffix(name) + '.jpg'
-        _format = 'JPEG'
         converted = True
-    else:
-        dest = suffix(name) + ext
+        _format = 'JPEG'
+
+    dest = compute_destination(name, ext, img)
 
     try:
         img.save(dest, _format, quality=qual, optimize=optimal, exif=exifdata, progressive=_progressive)
@@ -222,7 +228,6 @@ def resize_image(src):
 
     global HRES, VRES, lock
 
-    converted = False
     _progressive = progressive
     name, ext = os.path.splitext(src)
     if name.endswith(pad) and not includeimgp:
@@ -369,16 +374,12 @@ def resize_image(src):
     if not mute:
         stats = src + '\n%dx%d -> %dx%d\n%ld bytes ->' % (hres, vres, img.size[0], img.size[1], os.path.getsize(src))
 
+    converted = False
     if convert and _format == 'PNG':
-        if img.mode in ('RGBA', 'LA'):
-            background = Image.new(img.mode[:-1], img.size, fill_color)
-            background.paste(img, img.split()[-1])
-            img = background
-        dest = suffix(name) + '.jpg'
-        _format = 'JPEG'
         converted = True
-    else:
-        dest = suffix(name) + ext
+        _format = 'JPEG'
+
+    dest = compute_destination(name, ext, img)
 
     try:
         img.save(dest, _format, quality=qual, optimize=optimal, exif=exifdata, progressive=_progressive)
