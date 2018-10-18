@@ -105,7 +105,7 @@ def cb(data):
 def traverse_dir(path):
     '''Traverse a directory recursively'''
 
-    global lock, pool
+    global pool
 
     try:
         for entry in os.scandir(path):
@@ -124,8 +124,7 @@ def traverse_dir(path):
                 op = rotate_image if rotate is not None else resize_image
                 pool.apply_async(op, args=(entry.path,), callback=cb)
     except OSError as e:
-        with lock:
-            print(e)
+        lock_print(e)
 
 
 def is_supported(_format, src):
@@ -166,8 +165,6 @@ def compute_destination(name, ext, img):
 def rotate_image(src):
     '''Rotate a source image'''
 
-    global lock
-
     _progressive = progressive
     name, ext = os.path.splitext(src)
     if name.endswith(pad) and not includeimgp:
@@ -191,8 +188,7 @@ def rotate_image(src):
         exifdata = b'' if eraseexif else img.info.get('exif', b'')
     except OSError as e:
         if not str(e).startswith('cannot identify image file'):
-            with lock:
-                print(e)
+            lock_print(e)
         return
 
     # Image.rotate(angle, resample=0, expand=0) expand = True means
@@ -219,14 +215,13 @@ def rotate_image(src):
 
         return [1, 0]
     except OSError as e:
-        with lock:
-            print(e)
+        lock_print(e)
 
 
 def resize_image(src):
     '''Resize a source image'''
 
-    global HRES, VRES, lock
+    global HRES, VRES
 
     _progressive = progressive
     name, ext = os.path.splitext(src)
@@ -261,8 +256,7 @@ def resize_image(src):
         exifdata = b'' if eraseexif else img.info.get('exif', b'')
     except OSError as e:
         if not str(e).startswith('cannot identify image file'):
-            with lock:
-                print(e)
+            lock_print(e)
         return
 
     hres = img.size[0]
@@ -391,8 +385,7 @@ def resize_image(src):
 
         return [1, 0]
     except OSError as e:
-        with lock:
-            print(e)
+        lock_print(e)
 
 
 class ExtendedArgumentParser(argparse.ArgumentParser):
